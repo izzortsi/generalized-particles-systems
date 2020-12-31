@@ -1,7 +1,7 @@
 # using MakieLayout
 # using MakieLayout.Animations
 
-using AbstractPlotting
+using Makie
 
 
 container_scene = Scene(camera=campixel!, resolution=(1200, 1200))

@@ -6,7 +6,6 @@ function makie_abm(
         as=1,
         am=:circle,
         scheduler=model.scheduler,
-        offset=nothing,
         when=true,
         spu=1:100,
         equalaspect=true,
@@ -20,7 +19,7 @@ function makie_abm(
     s = 0 # current step
 
     # Initialize main layout and abm axis
-    scene, layout = layoutscene(resolution=resolution, backgroundcolor=RGBf0(0.98, 0.98, 0.98))
+    scene, layout = layoutscene(resolution=resolution, backgroundcolor=DEFAULT_BG)
     abmax = layout[1,1] = LAxis(scene)
     mlims = modellims(model)
     xlims!(abmax, 0, mlims[1])
@@ -109,10 +108,7 @@ function make_abm_controls!(scene, controllayout, model, params, spu)
     slesl = labelslider!(scene, "sleep =", _s, sliderkw=Dict(:startvalue => _v))
     controllayout[1, :] = spusl.layout
     controllayout[2, :] = slesl.layout
-
-    rtoggle = LToggle(scene, active=false)
-    rtog_label = LText(scene, lift(x -> x ? "running" : "not running", rtoggle.active)
-    run = hcat(rtoggle, rtog_label)
+    run = LButton(scene, label="run")
     update = LButton(scene, label="update")
     reset = LButton(scene, label="reset")
     controllayout[3, :] = MakieLayout.hbox!(run, update, reset, tellwidth=false)

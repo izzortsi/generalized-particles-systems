@@ -1,19 +1,16 @@
-using Agents, AgentsPlots, Colors, DrWatson, ImageCore, LinearAlgebra, Random
+using Agents, Colors, DrWatson, ImageCore, LinearAlgebra, Random
+# using InteractiveChaos, 
+# using AgentsPlots
 
+import Statistics: mean
 ##
 using Makie
 ##
-using InteractiveChaos
-##
-import Statistics: mean
-##
 include("aux_funs.jl")
 ##
-
-initialize_model()
-
+using Makie.AbstractPlotting, Observables
+using Makie.AbstractPlotting.MakieLayout
 ##
-
 
 
 cmap = colormap("RdBu", mid=0.5)
@@ -50,87 +47,132 @@ fps = 18
 
 model = initialize_model(dims=(80, 80), params=params)
 e = model.space.extend
-##
 
-##
-scene, df = interactive_abm(model, agent_step!, model_step!, params_intervals; as=0.8, mdata=mdata, mlabels=mlabels)
-##
-scene
-##
-stream = VideoStream(scene, framerate=fps)
-##
-recordframe!(stream)
-##
-stream
-##
-save("/simulation.mp4", stream)
-# record(p1[1], "particles.mp4"; framerate=fps)
-##
 
 
 ##
 
+function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler; resolution=(1280, 720), fps=24)
+    
+    ids = scheduler(model)
 
+    # model-related observables
+    modelobs = Observable(model)
+    colors = ac isa Function ? Observable(to_color.([ac(model[i]) for i in ids])) : to_color(ac)
+    sizes  = as isa Function ? Observable([as(model[i]) for i in ids]) : as
+    markers = am isa Function ? Observable([am(model[i]) for i in ids]) : am
+    pos = Observable([model[i].pos for i in ids])
 
-# using LinearAlgebra
+    # interaction control observables
 
-# using AbstractPlotting
+    run_obs = Observable{Bool}(false)
+    rec_obs = Observable{Bool}(false)
+    
+    scene, layout = layoutscene(resolution=resolution)
+    running_label = LText(scene, lift(x -> x ? "RUNNING" : "HALTED", run_obs))
+    recording_label = LText(scene, lift(x -> x ? "RECORDING" : "STOPPED", rec_obs))
 
-scene = Scene(raw=true, camera=cam2d!, resolution=(500, 500))
-r = LinRange(0, 3, 4)
-the_time = Node(time())
-last_open = false
-@async while true
-    global last_open
-    the_time[] = time()
-    # this is a bit awkward, since the isopen(scene) is false
-    # as long as the scene isn't displayed
-    last_open && !isopen(scene) && break
-    last_open = isopen(scene)
-    sleep(1 / 30)
+    ax1 = layout[1, 1] = LAxis(scene, width=resolution[1] - 100)
+    layout[2, 1] = grid!(hcat(running_label, recording_label), tellheight=true, tellwidth=true)
+
+    scatter!(ax1, pos;
+    color=colors, markersize=sizes, marker=markers, strokewidth=0.0, resolution=resolution)
+
+    keyboard_interactions(scene, modelobs, pos, colors, sizes, markers, ac, as, am, run_obs, rec_obs, fps)
+
+    return scene, ids, colors, sizes, markers, pos, ac, as, am
 end
-pos = lift(scene.events.mouseposition, the_time) do mpos, t
-    map(LinRange(0, 2pi, 60)) do i
-        circle = Point2f0(sin(i), cos(i))
-        mouse = to_world(scene, Point2f0(mpos))
-        secondary = (sin((i * 10f0) + t) * 0.09) * normalize(circle)
-        (secondary .+ circle) .+ mouse
+##
+
+##
+
+function keyboard_interactions(scene, modelobs, pos, colors, sizes, markers, ac, as, am, run_obs, rec_obs, fps)
+
+    stream = VideoStream(scene, framerate=fps)
+
+    on(scene.events.keyboardbuttons) do button
+
+        if button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.s]) 
+
+            run_obs[] = !run_obs[]
+            run_obs[] ? println("Simulation running.") : println("Simulation stopped.")
+
+            @async while run_obs[]
+                # update observables in scene
+                model = modelobs[]
+                Agents.step!(model, agent_step!, model_step!, n)
+                ids = scheduler(model)
+                update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)
+                isopen(scene) || break # crucial, ensures computations stop if closed window.
+                sleep(1 / fps)
+            end
+            # end
+        
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.r]) 
+
+            if !rec_obs[]
+                # start recording
+                rec_obs[] = !rec_obs[]
+                println("Recording started.")
+
+                @async while rec_obs[]
+                    recordframe!(stream)
+                    sleep(1 / fps)
+                end
+
+            elseif rec_obs[]
+                # save stream and stop recording
+                rec_obs[] = !rec_obs[]
+                savepath = "test_rec.mp4"
+                save(savepath, stream)
+                println("Recording stopped. File saved at $savepath.")
+            end
+
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
+            println('p')
+
+            # save parameters
+        
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.s]) 
+            println('s')
+
+            # restart simulation with current parameters and same initial conditions
+
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.s]) 
+            println('s')
+
+            # restart simulation with current parameters and random initial conditions
+        
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.s]) 
+            println('s')
+
+            # restart simulation with random parameters and random initial conditions
+
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.s]) 
+            println('s')
+
+            # randomize parameters while still running
+
+        end
+
     end
 end
-lines!(scene, pos)
-p1 = scene[end]
-p2 = Makie.scatter!(
-    scene,
-    pos, markersize=0.1f0,
-    marker=:star5,
-    color=p1.color,
-)[end]
-center!(scene)
-t = Theme(raw=true, camera=campixel!)
-b1 = button(t, "color")
-b2 = button(t, "marker")
-msize = slider(t, 0.1:0.01:0.5)
-on(b1[end][:clicks]) do c
-    p1.color = rand(RGBAf0)
-end
-markers = ('π', '😹', '⚃', '◑', '▼')
-on(b2[end][:clicks]) do c
-    p2.marker = markers[rand(1:5)]
-end
-on(msize[end][:value]) do val
-    p2.markersize = val
-end
-
-final = hbox(
-    vbox(b1, b2, msize),
-    scene
-)
 
 ##
-rand(markers)
-# Do not execute beyond this point!
+makie_abm(model)
 ##
 
-RecordEvents(final, "output")
-
+function update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)
+    
+    if Agents.nagents(model) == 0
+        @warn "The model has no agents, we can't plot anymore!"
+        error("The model has no agents, we can't plot anymore!")
+    end
+    
+    pos[] = [model[i].pos for i in ids]
+    
+    if ac isa Function; colors[] = to_color.([ac(model[i]) for i in ids]); end
+    if as isa Function; sizes[] = [as(model[i]) for i in ids]; end
+    if am isa Function; markers[] = [am(model[i]) for i in ids]; end
+end
 

@@ -6,11 +6,8 @@ function makie_abm(
         as=1,
         am=:circle,
         scheduler=model.scheduler,
-        offset=nothing,
-        when=true,
-        spu=1:100,
-        equalaspect=true,
-        resolution=(1200, 720)
+        resolution=(1200, 720),
+        spu=1:100
     )
 
     # initialize data collection stuff
@@ -25,7 +22,6 @@ function makie_abm(
     mlims = modellims(model)
     xlims!(abmax, 0, mlims[1])
     ylims!(abmax, 0, mlims[2])
-    equalaspect && (abmax.aspect = AxisAspect(1))
 
     # initialize abm plot stuff
     ids = scheduler(model)
@@ -44,18 +40,16 @@ function makie_abm(
     make_abm_controls!(scene, controllayout, model, params, spu)
 
     # Running the simulation:
-    isrunning = Observable(false)
-    on(run) do clicks; isrunning[] = !isrunning[]; end
-    on(run) do clicks
-        @async while isrunning[]
-            model = modelobs[]
-            n = spuslider[]
-            Agents.step!(model, agent_step!, model_step!, n)
-            ids = scheduler(model)
-            update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am, offset)
-            sleslider[] == 0 ? yield() : sleep(sleslider[])
-            isopen(scene) || break # crucial, ensures computations stop if closed window.
-        end
+    isrunning = lift(x -> x, run.active)
+    
+    @async while isrunning[]
+        model = modelobs[]
+        n = spuslider[]
+        Agents.step!(model, agent_step!, model_step!, n)
+        ids = scheduler(model)
+        update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am, offset)
+        sleslider[] == 0 ? yield() : sleep(sleslider[])
+        isopen(scene) || break # crucial, ensures computations stop if closed window.
     end
 
     # Clicking the update button:
@@ -73,7 +67,7 @@ function makie_abm(
     end
 
     display(scene)
-    return scene, df_agent, df_model
+    return scene
 end
 
 function modellims(model)
@@ -110,9 +104,10 @@ function make_abm_controls!(scene, controllayout, model, params, spu)
     controllayout[1, :] = spusl.layout
     controllayout[2, :] = slesl.layout
 
-    rtoggle = LToggle(scene, active=false)
-    rtog_label = LText(scene, lift(x -> x ? "running" : "not running", rtoggle.active)
-    run = hcat(rtoggle, rtog_label)
+    # rtoggle = LToggle(scene, active=false)
+    # rtog_label = LText(scene, lift(x -> x ? "running" : "not running", rtoggle.active))
+    # run = hcat(rtoggle, rtog_label)
+    run = LToggle(scene, active=false)
     update = LButton(scene, label="update")
     reset = LButton(scene, label="reset")
     controllayout[3, :] = MakieLayout.hbox!(run, update, reset, tellwidth=false)
@@ -124,27 +119,12 @@ function make_abm_controls!(scene, controllayout, model, params, spu)
         slidervals[l] = sll.slider.value # directly add the observable
         controllayout[i + 4, :] = sll.layout
     end
-    return slidervals, run.clicks, update.clicks, spusl.slider.value, slesl.slider.value, reset.clicks
+    return slidervals, run, update.clicks, spusl.slider.value, slesl.slider.value, reset.clicks
 end
 
 function update_abm_parameters!(model, params, slidervals)
     for l in keys(slidervals)
         v = slidervals[l][]
         model.properties[l] = v
-    end
-end
-
-function vline!(ax, x; kwargs...)
-    linepoints = lift(ax.limits, x) do lims, x
-        ymin = minimum(lims)[2]
-        ymax = maximum(lims)[2]
-        Point2f0.([x, x], [ymin, ymax])
-    end
-    lines!(ax, linepoints; yautolimits=false, kwargs...)
-end
-
-function add_reset_line!(axs, s)
-    for ax in axs
-        vline!(ax, s; color="#c41818")
     end
 end

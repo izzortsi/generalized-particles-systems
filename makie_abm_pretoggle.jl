@@ -109,10 +109,7 @@ function make_abm_controls!(scene, controllayout, model, params, spu)
     slesl = labelslider!(scene, "sleep =", _s, sliderkw=Dict(:startvalue => _v))
     controllayout[1, :] = spusl.layout
     controllayout[2, :] = slesl.layout
-
-    rtoggle = LToggle(scene, active=false)
-    rtog_label = LText(scene, lift(x -> x ? "running" : "not running", rtoggle.active)
-    run = hcat(rtoggle, rtog_label)
+    run = LButton(scene, label="run")
     update = LButton(scene, label="update")
     reset = LButton(scene, label="reset")
     controllayout[3, :] = MakieLayout.hbox!(run, update, reset, tellwidth=false)

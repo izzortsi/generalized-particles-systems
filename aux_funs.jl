@@ -115,30 +115,50 @@ function match(particle, model, ids)
     return match_vector ./ N .* model.match_factor
 end
 
-
-function make_gif(n_steps, cmap)
-    anim = @animate for i in 0:n_steps
-        i > 0 && Agents.step!(model, agent_step!, 1)
-        # println([model.max_nb, model.min_nb])
-        p1 = plotabm(
-            model;
-            # am=bird_triangle,
-            as=0.8,
-            ac=ac,
-            showaxis=false,
-            grid=false,
-            xlims=(0, e[1]),
-            ylims=(0, e[2]),
-        )
-        title!(p1, "step $(i)")
-    end
-
-    return gif(anim, "flock.gif", fps=fps)
-end
-
 distance(a1, a2) = sqrt(sum((a1.pos .- a2.pos).^2))
 get_heading(a1, a2) = a1.pos .- a2.pos
 
 ac(a) = (colorsigned(cmap[1], cmap[50], cmap[end]) ∘ scalesigned(0.0, 0.5, 1.0))(a.activation)
 avg_nbsize(model) = mean(collect(a.nb_size for a in allagents(model)))
 avg_activation(model) = mean(collect(a.activation for a in allagents(model)))
+
+
+function scatter_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler, resolution=(1280, 720))
+
+    ids = scheduler(model)
+    colors = ac isa Function ? Observable(to_color.([ac(model[i]) for i in ids])) : to_color(ac)
+    sizes  = as isa Function ? Observable([as(model[i]) for i in ids]) : as
+    markers = am isa Function ? Observable([am(model[i]) for i in ids]) : am
+    pos = Observable([model[i].pos for i in ids])
+
+    scene = scatter(pos;
+    color=colors, markersize=sizes, marker=markers, strokewidth=0.0, resolution=resolution)
+
+    display(scene)
+
+    return scene, ids, colors, sizes, markers, pos, ac, as, am
+end
+
+function record_simulation(model::AgentBasedModel, interval::AbstractRange; framerate=30, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler, resolution=(1280, 720))
+
+    scene, ids, colors, sizes, markers, pos, ac, as, am = scatter_abm(model, ac, as, am, scheduler, resolution)
+
+    record(scene, "abm_animation.mp4", interval; framerate=framerate) do t
+        Agents.step!(model, agent_step!, model_step!, 1)
+        update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)
+    end
+end
+
+function update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)
+    
+    if Agents.nagents(model) == 0
+        @warn "The model has no agents, we can't plot anymore!"
+        error("The model has no agents, we can't plot anymore!")
+    end
+    
+    pos[] = [model[i].pos for i in ids]
+    
+    if ac isa Function; colors[] = to_color.([ac(model[i]) for i in ids]); end
+    if as isa Function; sizes[] = [as(model[i]) for i in ids]; end
+    if am isa Function; markers[] = [am(model[i]) for i in ids]; end
+end
