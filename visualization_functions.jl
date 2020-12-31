@@ -1,57 +1,3 @@
-using Agents, Colors, DrWatson, ImageCore, LinearAlgebra, Random
-# using InteractiveChaos, 
-# using AgentsPlots
-using Dates
-import Statistics: mean
-##
-using Makie
-##
-include("model_functions.jl")
-include("visualization_functions.jl")
-##
-using Makie.AbstractPlotting, Observables
-using Makie.AbstractPlotting.MakieLayout
-##
-
-
-cmap = colormap("RdBu", mid=0.5)
-
-
-mdata = [avg_nbsize, avg_activation]
-mlabels = ["average num neighbors", "average acivation"]
-
-params_intervals = Dict(
-    :iradius => 0.1:0.1:8.0,
-    :cohere_factor => 0.1:0.01:0.6, 
-    :separation => 0.1:0.1:8.0, 
-    :separate_factor => 0.1:0.01:0.6, 
-    :match_factor => 0.005:0.001:0.1
-    )
-
-##
-
-params = Dict(
-    :n_particles => 600, 
-    :speed => 1.5, 
-    :separation => 0.7, 
-    :iradius => 1.4, 
-    :cohere_factor => 0.23, 
-    :separate_factor => 0.15, 
-    :match_factor => 0.03,
-    :min_nb => 0., 
-    :max_nb => 1.
-    )
-
-
-n_steps = 1500
-fps = 18
-
-model = initialize_model(dims=(80, 80), params=params)
-e = model.space.extend
-
-
-
-##
 
 function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler; resolution=(1280, 720), fps=24, savepath="abm_recording.mp4")
     
@@ -137,6 +83,7 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
 
     return scene, ids, colors, sizes, markers, pos, ac, as, am
 end
+
 function namefile(savepath)
     timestamp_format = "yy-mm-dd|HH:MM:SS"
     tstamp = Dates.format(now(), timestamp_format)
@@ -145,11 +92,18 @@ function namefile(savepath)
     return new_filepath
 end
 
-##
-model = initialize_model(dims=(80, 80), params=params)
-e = model.space.extend
-
-scene, p = makie_abm(model)
-##
+function update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)
+    
+    if Agents.nagents(model) == 0
+        @warn "The model has no agents, we can't plot anymore!"
+        error("The model has no agents, we can't plot anymore!")
+    end
+    
+    pos[] = [model[i].pos for i in ids]
+    
+    if ac isa Function; colors[] = to_color.([ac(model[i]) for i in ids]); end
+    if as isa Function; sizes[] = [as(model[i]) for i in ids]; end
+    if am isa Function; markers[] = [am(model[i]) for i in ids]; end
+end
 
 
