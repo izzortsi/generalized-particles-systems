@@ -62,7 +62,7 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                         end
 
                         save(new_filepath, stream)
-                        println("Window closed while recording. Recording stopped. Files saved at $prepath$tstamp.")
+                        println("Window closed while recording. Recording stopped. Files saved at $prepath$tstamp/.")
                         break
                     end
                 end
@@ -98,7 +98,7 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                 end
 
                 save(new_filepath, stream)
-                println("Recording stopped. Files saved at $prepath$tstamp.")
+                println("Recording stopped. Files saved at $prepath$tstamp/.")
             end
 
         elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
@@ -122,7 +122,7 @@ function namefile(prepath, savepath)
     timestamp_format = "HH:MM:SS"
     tstamp = Dates.format(now(), timestamp_format)
     dot_idx = findlast(isequal('.'), savepath)
-    new_filepath = prepath * "$tstamp/" * savepath[1:dot_idx - 1] * "$(tstamp[end - 1:end])" * savepath[dot_idx:end]
+    new_filepath = prepath * "sim$tstamp/" * savepath[1:dot_idx - 1] * "$tstamp" * savepath[dot_idx:end]
     return new_filepath, tstamp
 end
 

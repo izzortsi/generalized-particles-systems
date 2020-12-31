@@ -47,8 +47,15 @@ params = Dict(
 ##
 # JLD.save("params.jld", "params", params)
 
-##
 
+##
+sym = :k
+String(sym)
+es = :(Symbol("3"))
+##
+eval(:(String(sym)))
+##
+eval(es)
 ##
 
 n_steps = 1500
@@ -56,7 +63,7 @@ fps = 18
 
 model = initialize_model(dims=(80, 80), params=params)
 e = model.space.extend
-
+AbstractPlotting.MakieLayout.Fixed
 
 
 ##
@@ -72,25 +79,55 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
     prepath = "$superfolder/$(hour)h/"
 
     ids = scheduler(model)
-
+    scene, layout = layoutscene(resolution=resolution)
     # model-related observables
     modelobs = Observable(model)
     colors = ac isa Function ? Observable(to_color.([ac(model[i]) for i in ids])) : to_color(ac)
     sizes  = as isa Function ? Observable([as(model[i]) for i in ids]) : as
     markers = am isa Function ? Observable([am(model[i]) for i in ids]) : am
     pos = Observable([model[i].pos for i in ids])
-
+    # criar observers pras propriedades que tão sujeitas a randomização (com os valores iniciais)
+    props_obs = []
+    props_labels = []
+    if params_intervals != nothing
+        for (key, val) in params_intervals
+            value = modelobs[].properties[key]
+            # eval(:($(key) = Observable($value)))
+            # push!(props_obs, eval(:($key)))
+            lstring = String(key)
+            obs = lift(x -> x.properties[key], modelobs)
+            # plabel = eval(:(LText(scene, lift(x -> "$(lstring): HALTED", obs))))
+            plabel = LText(scene, lift(x -> "$(lstring): $x", obs))
+            push!(props_obs, obs)
+            push!(props_labels, plabel)
+        end
+    end
+    println("PROPSOBS: ", props_obs)
+    # print(iradius)
     # interaction control observables
 
     run_obs = Observable{Bool}(false)
     rec_obs = Observable{Bool}(false)
+
     
-    scene, layout = layoutscene(resolution=resolution)
+    
     running_label = LText(scene, lift(x -> x ? "RUNNING" : "HALTED", run_obs))
     recording_label = LText(scene, lift(x -> x ? "RECORDING" : "STOPPED", rec_obs))
 
-    ax1 = layout[1, 1] = LAxis(scene, width=resolution[1] - 100)
-    layout[2, 1] = grid!(hcat(running_label, recording_label), tellheight=true, tellwidth=true)
+    ax1 = layout[1, 1] = LAxis(scene, tellheight=true, tellwidht=true)
+    infos = GridLayout(tellheight=false, tellwidth=true)
+    infos[1, 1] = running_label
+    infos[2, 1] = recording_label
+    
+    for (i, plabel) in enumerate(props_labels)
+        infos[i + 2, 1] = plabel
+    end
+    
+    layout[1, 2] = infos
+
+
+    # colsize!(layout, 1, 10)
+    # layout[1, 2] = grid!(hcat(running_label, recording_label), tellheight=false, tellwidth=true)
 
     scatter!(ax1, pos;
     color=colors, markersize=sizes, marker=markers, strokewidth=0.0)
@@ -117,14 +154,14 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                     else
                 
                         new_filepath, tstamp = namefile(prepath, savepath)
-                        path = mkpath("$(@__DIR__)/$prepath$tstamp")
+                        path = mkpath("$(@__DIR__)/$(prepath)sim$tstamp")
                         
                         open("$path/params$tstamp.json", "w") do f 
                             write(f, JSON.json(modelobs[].properties))
                         end
 
                         save(new_filepath, stream)
-                        println("Window closed while recording. Recording stopped. Files saved at $prepath$tstamp.")
+                        println("Window closed while recording. Recording stopped. Files saved at $(prepath)sim$tstamp/.")
                         break
                     end
                 end
@@ -153,58 +190,47 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                 # save stream and stop recording
                 rec_obs[] = !rec_obs[]
                 new_filepath, tstamp = namefile(prepath, savepath)
-                path = mkpath("$(@__DIR__)/$prepath$tstamp")
+                path = mkpath("$(@__DIR__)/$(prepath)sim$tstamp")
 
                 open("$path/params$tstamp.json", "w") do f 
                     write(f, JSON.json(modelobs[].properties))
                 end
 
                 save(new_filepath, stream)
-                println("Recording stopped. Files saved at $prepath$tstamp.")
+                println("Recording stopped. Files saved at $(prepath)sim$tstamp/.")
             end
 
         elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
-            nothing
+            if params_intervals != nothing
+                for (key, val) in params_intervals
+                    new_val = rand(val)
+                    modelobs[].properties[key] = new_val
+                end
+            else
+                println("Parameters intervals are needed for randomization.")
+            end
         
-        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.i]) 
             nothing
 
         elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.v])
-            # save parameters 
-            nothing
-
+            # save parameters
+            new_filepath, tstamp = namefile(prepath, savepath)
+            path = mkpath("$(@__DIR__)/$(prepath)params$tstamp")
+            open("$path/params$tstamp.json", "w") do f 
+                write(f, JSON.json(modelobs[].properties))
+            end
+            # save("$path/scene$tstamp.png", scene)
+            println("Parameters saved at file $(prepath)params$tstamp/params$tstamp.json")
 
         end
     end
 
     return scene, ids, colors, sizes, markers, pos, ac, as, am
 end
-function namefile(prepath, savepath)
-    timestamp_format = "HH:MM:SS"
-    tstamp = Dates.format(now(), timestamp_format)
-    dot_idx = findlast(isequal('.'), savepath)
-    new_filepath = prepath * "$tstamp/" * savepath[1:dot_idx - 1] * "$(tstamp[end - 1:end])" * savepath[dot_idx:end]
-    return new_filepath, tstamp
-end
 
 ##
 model = initialize_model(dims=(80, 80), params=params)
 e = model.space.extend
 
-scene, p = makie_abm(model)
-##
-
-
-
-##
-ispressed(scene, Keyboard.left_shift)
-
-##
-on(scene.events.keyboardbuttons) do button
-    if ispressed(scene, AbstractPlotting.Keyboard.left_shift) & AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.i] ∈
-        println(button)
-    end
-end
-
-
-##
+scene, p = makie_abm(model, params_intervals=params_intervals)
