@@ -1,6 +1,14 @@
 
-function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler; resolution=(1280, 720), fps=24, savepath="abm_recording.mp4")
+function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.scheduler; initial_params=model.properties, params_intervals=nothing, resolution=(1280, 720), fps=24, savepath="abm_recording.mp4")
     
+    # TODO salvar recording junto com os parametros
+    # TODO 
+    date = Date(now())
+    superfolder = "simulations/simulations_$date"
+    timestamp_format = "HH"
+    hour = Dates.format(now(), timestamp_format)
+    prepath = "$superfolder/$(hour)h/"
+
     ids = scheduler(model)
 
     # model-related observables
@@ -45,9 +53,16 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                     if !rec_obs[]
                         break
                     else
-                        new_filepath = namefile(savepath)
+                
+                        new_filepath, tstamp = namefile(prepath, savepath)
+                        path = mkpath("$(@__DIR__)/$prepath$tstamp")
+                        
+                        open("$path/params$tstamp.json", "w") do f 
+                            write(f, JSON.json(modelobs[].properties))
+                        end
+
                         save(new_filepath, stream)
-                        println("Window closed while recording. Recording stopped. File saved at $new_filepath.")
+                        println("Window closed while recording. Recording stopped. Files saved at $prepath$tstamp.")
                         break
                     end
                 end
@@ -62,6 +77,7 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
                 # start recording
                 # start a new stream and set a new filename for the recording
                 stream = VideoStream(scene, framerate=fps)
+                
                 #
                 rec_obs[] = !rec_obs[]
                 println("Recording started.")
@@ -74,22 +90,40 @@ function makie_abm(model, ac="#765db4", as=1, am=:circle, scheduler=model.schedu
             elseif rec_obs[]
                 # save stream and stop recording
                 rec_obs[] = !rec_obs[]
-                new_filepath = namefile(savepath)
+                new_filepath, tstamp = namefile(prepath, savepath)
+                path = mkpath("$(@__DIR__)/$prepath$tstamp")
+
+                open("$path/params$tstamp.json", "w") do f 
+                    write(f, JSON.json(modelobs[].properties))
+                end
+
                 save(new_filepath, stream)
-                println("Recording stopped. File saved at $new_filepath.")
+                println("Recording stopped. Files saved at $prepath$tstamp.")
             end
+
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
+            nothing
+        
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.p]) 
+            nothing
+
+        elseif button == Set(AbstractPlotting.Keyboard.Button[AbstractPlotting.Keyboard.v])
+            # save parameters 
+            nothing
+
+
         end
     end
 
     return scene, ids, colors, sizes, markers, pos, ac, as, am
 end
 
-function namefile(savepath)
-    timestamp_format = "yy-mm-dd|HH:MM:SS"
+function namefile(prepath, savepath)
+    timestamp_format = "HH:MM:SS"
     tstamp = Dates.format(now(), timestamp_format)
     dot_idx = findlast(isequal('.'), savepath)
-    new_filepath = savepath[1:dot_idx - 1] * "$tstamp" * savepath[dot_idx:end]
-    return new_filepath
+    new_filepath = prepath * "$tstamp/" * savepath[1:dot_idx - 1] * "$(tstamp[end - 1:end])" * savepath[dot_idx:end]
+    return new_filepath, tstamp
 end
 
 function update_abm_plot!(pos, colors, sizes, markers, model, ids, ac, as, am)

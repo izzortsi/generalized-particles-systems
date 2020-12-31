@@ -115,3 +115,12 @@ on(scene.events.keyboardbuttons) do button
     end
 
 end
+
+##
+# check button pressed with
+
+if ispressed(scene, AbstractPlotting.Keyboard.left_shift)
+    println(button, "T")
+else
+    println(button, "F")
+end
